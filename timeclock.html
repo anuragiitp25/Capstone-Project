@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GlobalTime - World Clock</title>
+    <!-- Bootstrap 5 CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@11.0.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet" xintegrity="sha384-GLhlTQ8iRABdZLl6O3oVMWSktQOp6b7In1Zl3/Jr59b6EGGoI1aFkw7cmDA6j6gD" crossorigin="anonymous">
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&family=Inter:wght@300;500;800&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-color: #0f172a;
+            --card-bg: #1e293b;
+            --accent-color: #38bdf8;
+            --text-main: #f8fafc;
+            --text-dim: #94a3b8;
+        }
+
+        body {
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            font-family: 'Inter', sans-serif;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .clock-container {
+            max-width: 600px;
+            width: 100%;
+            background: var(--card-bg);
+            border-radius: 24px;
+            padding: 2rem;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .display-time {
+            font-family: 'JetBrains+Mono', monospace;
+            font-size: 4.5rem;
+            font-weight: 700;
+            color: var(--accent-color);
+            text-shadow: 0 0 20px rgba(56, 189, 248, 0.3);
+            margin: 1rem 0;
+            letter-spacing: -2px;
+        }
+
+        @media (max-width: 576px) {
+            .display-time { font-size: 3rem; }
+        }
+
+        .display-date {
+            font-size: 1.25rem;
+            color: var(--text-dim);
+            font-weight: 300;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+        }
+
+        .form-select {
+            background-color: #0f172a;
+            border: 1px solid #334155;
+            color: white;
+            border-radius: 12px;
+            padding: 12px;
+            margin-top: 20px;
+        }
+
+        .form-select:focus {
+            background-color: #0f172a;
+            color: white;
+            border-color: var(--accent-color);
+            box-shadow: 0 0 0 0.25rem rgba(56, 189, 248, 0.25);
+        }
+
+        .badge-utc {
+            background: rgba(56, 189, 248, 0.1);
+            color: var(--accent-color);
+            border: 1px solid var(--accent-color);
+            font-weight: 500;
+        }
+
+        .location-label {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 5px;
+            color: var(--text-dim);
+            font-size: 0.9rem;
+        }
+
+        .dot {
+            height: 8px;
+            width: 8px;
+            background-color: #22c55e;
+            border-radius: 50%;
+            display: inline-block;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.5; transform: scale(1.2); }
+            100% { opacity: 1; transform: scale(1); }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="clock-container text-center">
+        <div class="location-label justify-content-center">
+            <span class="dot"></span>
+            <span id="current-location-text">Local Time</span>
+        </div>
+        
+        <div id="clock" class="display-time">00:00:00</div>
+        <div id="date" class="display-date">Loading...</div>
+        
+        <div class="mt-4">
+            <span id="utc-offset" class="badge badge-utc rounded-pill p-2 px-3">UTC +00:00</span>
+        </div>
+
+        <div class="mt-4 text-start">
+            <label for="timezone-select" class="form-label text-dim small ps-1">Select Region / City</label>
+            <select id="timezone-select" class="form-select">
+                <option value="local" selected>Detect My Location</option>
+                <!-- Timezones will be populated here by JS -->
+            </select>
+        </div>
+
+        <footer class="mt-5 text-dim small">
+            &copy; <span id="year"></span> GlobalTime | Precise Synchronization
+        </footer>
+    </div>
+
+    <script>
+        const clockElement = document.getElementById('clock');
+        const dateElement = document.getElementById('date');
+        const timezoneSelect = document.getElementById('timezone-select');
+        const locationText = document.getElementById('current-location-text');
+        const utcOffsetElement = document.getElementById('utc-offset');
+        const yearElement = document.getElementById('year');
+
+        let currentSelectedTz = 'local';
+
+        // Populate the timezone dropdown
+        function populateTimezones() {
+            const timezones = Intl.supportedValuesOf('timeZone');
+            timezones.forEach(tz => {
+                const option = document.createElement('option');
+                option.value = tz;
+                // Prettify the display name (e.g., Africa/Abidjan -> Abidjan, Africa)
+                const parts = tz.split('/');
+                const city = parts[parts.length - 1].replace(/_/g, ' ');
+                const region = parts[0];
+                option.textContent = `${city} (${region})`;
+                timezoneSelect.appendChild(option);
+            });
+        }
+
+        function updateClock() {
+            const now = new Date();
+            let options = {
+                hour: '2-digit',
+                minute: '2-digit',
+                second: '2-digit',
+                hour12: false
+            };
+
+            let dateOptions = {
+                weekday: 'long',
+                year: 'numeric',
+                month: 'long',
+                day: 'numeric'
+            };
+
+            if (currentSelectedTz !== 'local') {
+                options.timeZone = currentSelectedTz;
+                dateOptions.timeZone = currentSelectedTz;
+            }
+
+            // Update Time
+            const timeString = new Intl.DateTimeFormat('en-GB', options).format(now);
+            clockElement.textContent = timeString;
+
+            // Update Date
+            const dateString = new Intl.DateTimeFormat('en-US', dateOptions).format(now);
+            dateElement.textContent = dateString;
+
+            // Update Offset Badge
+            updateOffset(now);
+        }
+
+        function updateOffset(now) {
+            const tz = currentSelectedTz === 'local' ? Intl.DateTimeFormat().resolvedOptions().timeZone : currentSelectedTz;
+            
+            // Format to get UTC offset
+            const parts = new Intl.DateTimeFormat('en-GB', {
+                timeZone: tz,
+                timeZoneName: 'shortOffset'
+            }).formatToParts(now);
+            
+            const offset = parts.find(p => p.type === 'timeZoneName').value;
+            utcOffsetElement.textContent = offset;
+        }
+
+        timezoneSelect.addEventListener('change', (e) => {
+            currentSelectedTz = e.target.value;
+            if (currentSelectedTz === 'local') {
+                locationText.textContent = 'Local Time';
+            } else {
+                locationText.textContent = currentSelectedTz.split('/').pop().replace(/_/g, ' ');
+            }
+            updateClock(); // Immediate update on change
+        });
+
+        // Initialize
+        window.onload = () => {
+            yearElement.textContent = new Date().getFullYear();
+            populateTimezones();
+            setInterval(updateClock, 1000);
+            updateClock();
+        };
+    </script>
+</body>
+</html>
